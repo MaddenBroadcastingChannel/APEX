@@ -1,0 +1,2556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APEX Broadcast (Controller + Scorebug)</title>
+<base href="Assets/">
+<style>
+
+
+  html, body {
+
+    margin: 0;
+
+    padding: 0;
+
+    width: 1920px;
+
+    height: 1080px;
+
+    background: transparent;
+
+    overflow: hidden;
+
+    font-family: Arial, Helvetica, sans-serif;
+
+    user-select: none;
+
+  }
+
+
+
+  /* Controller is overlaid on top of the scorebug's top 720px, within the
+     same 1920x1080 canvas (the scorebug itself is unchanged/untouched).
+     In vMix, apply Crop: Top = 720px on this input so only the scorebug's
+     visible graphic goes out on air; the full page — including this
+     region — is still reachable by clicking into the input to interact
+     with the controller.
+     NOTE: verify the top ~720px of your scorebug graphic is visually
+     blank/transparent there already (typical for a lower-third bug) —
+     since the controller sits in the same rows rather than in extra
+     canvas space, anything the scorebug draws in that area will be
+     hidden behind the controller's opaque panel while editing, and will
+     be cropped away from the live output along with the controller. */
+  #controllerRegion {
+
+    position: absolute;
+
+    top: 0;
+
+    left: 0;
+
+    width: 1920px;
+
+    height: 720px;
+
+    background-color: #a5a5a5;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    overflow: hidden;
+
+    z-index: 10000;
+
+  }
+
+  
+
+  .blurred {
+
+    filter: blur(8px);
+
+    pointer-events: none;
+
+  }
+
+
+
+  .canvas-lock {
+
+    width: 1120px;
+
+    height: 720px; 
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    transform-origin: center center;
+
+    flex-shrink: 0;
+
+    transition: filter 0.3s ease;
+
+  }
+
+  
+
+  .panel-container { 
+
+    background: #000000;
+
+    border: 2px solid #a5a5a5;
+
+    border-radius: 8px;
+
+    padding: 24px;
+
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+
+    display: grid; 
+
+    grid-template-columns: repeat(12, 1fr); 
+
+    grid-gap: 14px; 
+
+    width: 100%;
+
+    height: 100%;
+
+    box-sizing: border-box;
+
+  }
+
+
+
+  .section-label { 
+
+    grid-column: span 4; 
+
+    text-align: center; 
+
+    font-weight: bold; 
+
+    font-size: 14px; 
+
+    color: #a5a5a5; 
+
+    letter-spacing: 2px;
+
+    align-self: end; 
+
+    text-transform: uppercase;
+
+  }
+
+  
+
+  .score-display { 
+
+    grid-column: span 4; 
+
+    width: 75px;
+
+    font-size: 72px; 
+
+    font-weight: bold; 
+
+    text-align: center; 
+
+    color: #000000; 
+
+    line-height: 1.1;
+
+    padding: 8px 0;
+
+    background: #a5a5a5;
+
+    border: 1px solid #a5a5a5;
+
+    border-radius: 4px;
+
+  }
+
+
+
+  .btn { 
+
+    background: #000000;
+
+    color: #a5a5a5; 
+
+    border: 2px solid #a5a5a5; 
+
+    border-radius: 4px; 
+
+    padding: 10px 6px; 
+
+    font-size: 13px; 
+
+    font-weight: bold; 
+
+    cursor: pointer; 
+
+    text-align: center; 
+
+    text-transform: uppercase;
+
+    letter-spacing: 1px;
+
+    transition: background 0.1s ease, color 0.1s ease;
+
+  }
+
+  
+
+  .btn:hover { 
+
+    background: #a5a5a5;
+
+    color: #000000;
+
+  }
+
+  
+
+  .btn:active { 
+
+    background: #555555; 
+
+    color: #000000;
+
+  }
+
+  
+
+  .btn.active-toggle { 
+
+    background: #a5a5a5 !important; 
+
+    color: #000000 !important; 
+
+    border-color: #a5a5a5 !important;
+
+  }
+
+
+
+  .btn-action-start { background: #a5a5a5; color: #000000; border-color: #a5a5a5; }
+
+  .btn-action-start:hover { background: #ffffff; border-color: #ffffff; }
+
+  
+
+  .btn-action-stop { background: #000000; color: #a5a5a5; border-color: #a5a5a5; }
+
+  .btn-action-stop:hover { background: #555555; color: #ffffff; }
+
+  
+
+  .btn-reset { 
+
+    background: #ff0000; 
+
+    color: #000000; 
+
+    border-color: #ff0000; 
+
+    font-size: 14px; 
+
+    letter-spacing: 1px;
+
+  }
+
+  .btn-reset:hover { 
+
+    background: #ffffff; 
+
+    color: #000000; 
+
+    border-color: #ffffff;
+
+  }
+
+  .logo-link {
+    grid-column: span 4; 
+    text-align: center; 
+    align-self: center;
+  }
+
+  .logo-link a {
+    display: inline-block; 
+    text-decoration: none;
+  }
+
+  .logo-link img {
+    height: 150px; 
+    width: auto; 
+    display: block; 
+    margin: 0 auto; 
+    filter: brightness(0.647);
+  }
+
+
+
+  .col-span-1 { grid-column: span 1; } .col-span-2 { grid-column: span 2; } .col-span-3 { grid-column: span 3; } .col-span-4 { grid-column: span 4; }
+
+  
+
+  .label-inline { font-weight: bold; font-size: 12px; color: #a5a5a5; align-self: center; letter-spacing: 1.5px; text-transform: uppercase; }
+
+  .right-align { text-align: right; padding-right: 8px;}
+
+  .left-align { text-align: left; padding-left: 8px;}
+
+  
+
+  .clock-container { grid-column: span 3; display: flex; justify-content: flex-end; align-items: center; padding-right: 16px; }
+
+  .clock-input { 
+
+    font-size: 34px; font-weight: bold; color: #000000; background: #a5a5a5; border: 2px solid #a5a5a5; border-radius: 4px; width: 140px; text-align: right; padding: 4px 8px;
+
+  }
+
+  .clock-input:focus { outline: none; background: #ffffff; border-color: #ffffff; }
+
+  
+
+  .play-clock-large { 
+
+    grid-column: span 1; 
+
+    font-size: 34px; 
+
+    font-weight: bold; 
+
+    text-align: right; 
+
+    align-self: center; 
+
+    color: #000000; 
+
+    background: #a5a5a5;
+
+    border: 2px solid #a5a5a5;
+
+    border-radius: 4px;
+
+    padding: 0px 8px;
+
+    transform: translateX(75px);
+
+  }
+
+  
+
+  input.distance-input, input.custom-text-input { 
+
+    font-size: 13px; font-weight: bold; padding: 10px; text-align: center; border: 2px solid #a5a5a5; border-radius: 4px; background-color: #000000; color: #a5a5a5;
+
+    box-sizing: border-box;
+
+  }
+
+  input.distance-input:focus { outline: none; background-color: #a5a5a5; color: #000000; }
+
+  
+
+  input[type="file"].logo-file-picker {
+
+    font-size: 11px;
+
+    font-weight: bold;
+
+    color: #a5a5a5;
+
+    max-width: 100%;
+
+  }
+
+
+
+  .divider-row { grid-column: span 12; height: 2px; background-color: #a5a5a5; margin: 4px 0; }
+
+  .qtr-grid { grid-column: span 4; height: fit-content; display: grid; grid-template-columns: repeat(2, 1fr); grid-gap: 8px; }
+
+
+
+  .config-row-left { grid-column: span 4; display: flex; gap: 8px; align-items: center; overflow: visible; }
+
+  .config-row-right { grid-column: span 4; display: flex; gap: 8px; align-items: center; justify-content: flex-end; overflow: visible; }
+
+  .color-picker-input { width: 40px; height: 36px; border: 2px solid #a5a5a5; border-radius: 4px; cursor: pointer; padding: 0; background: none; flex-shrink: 0; }
+
+  .color-picker-wrapper { position: relative; flex-shrink: 0; }
+
+  .color-swatch-btn { width: 40px; height: 36px; border: 2px solid #a5a5a5; border-radius: 4px; cursor: pointer; padding: 0; }
+
+  .color-popup {
+    display: none;
+    position: absolute;
+    top: 42px;
+    left: 0;
+    z-index: 200;
+    width: 170px;
+    background: #000000;
+    border: 2px solid #a5a5a5;
+    border-radius: 6px;
+    padding: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
+  }
+
+  .color-popup.align-right { left: auto; right: 0; }
+
+  .color-popup.open { display: block; }
+
+  .color-popup .hue-slider {
+    width: 100%;
+    height: 20px;
+    -webkit-appearance: none;
+    appearance: none;
+    border-radius: 10px;
+    background: linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+
+  .color-popup .hue-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid #000000;
+    cursor: pointer;
+  }
+
+  .color-popup .hue-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 2px solid #000000;
+    cursor: pointer;
+  }
+
+  .color-popup .hex-input {
+    width: 100%;
+    box-sizing: border-box;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 8px;
+    text-align: center;
+    text-transform: uppercase;
+    border: 2px solid #a5a5a5;
+    border-radius: 4px;
+    background-color: #000000;
+    color: #a5a5a5;
+  }
+
+  .color-popup .hex-input:focus { outline: none; background-color: #a5a5a5; color: #000000; }
+
+
+
+  .circle-toggle {
+
+    width: 24px;
+
+    height: 24px;
+
+    border: 2px solid #a5a5a5;
+
+    border-radius: 50%;
+
+    cursor: pointer;
+
+    background-color: #000000;
+
+    transition: all 0.15s ease;
+
+    align-self: center;
+
+    box-sizing: border-box;
+
+    position: relative;
+
+  }
+
+  .circle-toggle::after {
+
+    content: '';
+
+    position: absolute;
+
+    inset: 4px;
+
+    background: transparent;
+
+    border-radius: 50%;
+
+    transition: all 0.15s ease;
+
+  }
+
+  .circle-toggle:hover {
+
+    border-color: #ffffff;
+
+  }
+
+  .circle-toggle.toggled {
+
+    border-color: #a5a5a5;
+
+    background-color: #a5a5a5;
+
+  }
+
+  .circle-toggle.toggled::after {
+
+    background: #000000;
+
+  }
+
+
+
+ .activation-overlay {
+
+    position: absolute;
+
+    top: 0; left: 0; width: 100%; height: 100%;
+
+    background: rgba(0, 0, 0, 0.85);
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    z-index: 9999;
+
+  }
+
+
+
+  .activation-box {
+
+    background: #000000;
+
+    border: 2px solid #a5a5a5;
+
+    border-radius: 8px;
+
+    padding: 30px;
+
+    width: 380px;
+
+    text-align: center;
+
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.7);
+
+    box-sizing: border-box;
+
+  }
+
+
+
+  .activation-box h2 {
+
+    color: #a5a5a5;
+
+    margin-top: 0;
+
+    font-size: 18px;
+
+    letter-spacing: 2px;
+
+    text-transform: uppercase;
+
+  }
+
+
+
+  .activation-box p {
+
+    color: #7e7e7e;
+
+    font-size: 12px;
+
+    margin-bottom: 20px;
+
+  }
+
+
+
+  .activation-input {
+
+    width: 100%;
+
+    font-size: 18px;
+
+    font-weight: bold;
+
+    padding: 10px;
+
+    text-align: center;
+
+    border: 2px solid #a5a5a5;
+
+    border-radius: 4px;
+
+    background-color: #000000;
+
+    color: #a5a5a5;
+
+    box-sizing: border-box;
+
+    letter-spacing: 2px;
+
+    text-transform: uppercase;
+
+    margin-bottom: 15px;
+
+  }
+
+
+
+  .activation-input:focus {
+
+    outline: none;
+
+    border-color: #ffffff;
+
+    color: #ffffff;
+
+  }
+
+
+
+  .activation-error {
+
+    color: #ff0000;
+
+    font-size: 12px;
+
+    font-weight: bold;
+
+    margin-bottom: 15px;
+
+    min-height: 15px;
+
+    display: none;
+
+  }
+
+
+
+ 
+@font-face {
+    font-family: 'BentonSans Comp Bold';
+    src: url('bentonsans_comp_bold-webfont.woff2') format('woff2');
+    font-weight: normal;
+    font-style: bold;
+}
+
+@font-face {
+    font-family: 'BentonSans Bold';
+    src: url('bentonsans_bold-webfont.woff2') format('woff2');
+    font-weight: normal;
+    font-style: bold;
+}
+
+@font-face {
+    font-family: 'BentonSans Cond Medium';
+    src: url('bentonsans_cond_medium-webfont.woff2') format('woff2');
+    font-weight: normal;
+    font-style: medium;
+}
+
+body {
+  margin: 0;
+  background: #a5a5a500;
+  overflow: hidden;
+}
+
+.wrap {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  opacity: 0; 
+  transition: opacity 0.4s ease-in-out; 
+  pointer-events: none;
+}
+
+.wrap.animate-in {
+  opacity: 1;
+}
+
+.bg, .bevel, .awaycolor, .homecolor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.bg { z-index: 1; }
+.awaycolor, .homecolor { z-index: 2; }
+.bevel { z-index: 3; }
+
+.ato1, .ato2, .ato3, .hto1, .hto2, .hto3 {
+  background-image: url("TIMEOUT.png");
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  opacity: 0;
+  width: 1920px;
+  height: 1080px;
+  position: absolute;
+  z-index: 5;
+  transition: opacity 0.3s ease-in-out; 
+}
+
+.ato2 { transform: translate(0px, 0px); }
+.ato1 { transform: translate(120px, 0px); }
+.ato3 { transform: translate(-120px, -0.3px); }
+.hto1 { transform: translate(879px, -0.3px); }
+.hto2 { transform: translate(1000px, 0px); }
+.hto3 { transform: translate(1120px, -0.3px); }
+
+/* --- CSS IMPORTED FROM OINK2.CSS --- */
+.color-img-mask {
+  position: absolute;
+  top: -17px;
+  left: -1935px;
+  width: 1940px;
+  height: 1100px;
+  overflow: hidden;
+  border-right: 1920px solid transparent;
+  filter: drop-shadow(1920px 0 0 #7e7e7e);
+  z-index: 2;
+  mix-blend-mode: multiply;
+  opacity: 0;
+}
+
+.color2-img-mask {
+  position: absolute;
+  top: -17px;
+  left: -1922px;
+  width: 1930px;
+  height: 1100px;
+  overflow: hidden;
+  border-right: 1920px solid transparent;
+  filter: drop-shadow(1920px 0 0 #7e7e7e);
+  z-index: 2;
+  mix-blend-mode: multiply;
+  opacity: 0;
+}
+
+@keyframes awaycolorin { to { opacity: 1; } }
+@keyframes homecolorin { to { opacity: 1; } }
+
+.awayabr {
+  position: absolute;
+  transform: translate(435px, 888px);
+  opacity: 0;
+  display: inline-block;
+  width: 200px;
+  font-family: 'BentonSans Comp Bold', sans-serif;
+  font-size: 127px;
+  font-weight: 700;
+  text-align: center;
+  filter: drop-shadow(2px 6px 0px rgba(0,0,0,1));
+  color: white;
+  letter-spacing: 1px;
+  z-index: 5;
+}
+
+@keyframes moveIn {
+  from { transform: translate(435px, 867px); }
+  to { transform: translate(375px, 867px); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.homeabr {
+  position: absolute;
+  transform: translate(1315px, 887px);
+  opacity: 0;
+  display: inline-block;
+  width: 200px;
+  font-family: 'BentonSans Comp Bold', sans-serif;
+  font-size: 127px;
+  font-weight: 700;
+  text-align: center;
+  filter: drop-shadow(2px 6px 0px rgba(0,0,0,1));
+  color: white;
+  letter-spacing: 1px;
+  z-index: 5;
+}
+
+@keyframes moveIn2 {
+  from { transform: translate(1315px, 866px); }
+  to { transform: translate(1375px, 866px); }
+}
+@keyframes fadeIn2 {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.awayscore {
+  position: absolute;
+  transform: translate(480px, 686px);
+  opacity: 0;
+  display: inline-block;
+  width: 200px;
+  background: linear-gradient(to bottom, #ffffff 35%, #ffffff 50%, #c0bfbf 95%, #888888 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke-width: 3px;
+  -webkit-text-stroke-color: #ffffff;
+  font-family: 'BentonSans Comp Bold', sans-serif;
+  font-size: 125px;
+  font-weight: 700;
+  text-align: center;
+  filter: drop-shadow(0px 0px 4px rgba(0,0,0,0.5));
+  letter-spacing: 1px;
+  z-index: 0;
+}
+
+.homescore {
+  position: absolute;
+  transform: translate(700px, 686px);
+  opacity: 0;
+  display: inline-block;
+  width: 200px;
+  background: linear-gradient(to bottom, #ffffff 35%, #ffffff 50%, #c0bfbf 95%, #888888 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -webkit-text-stroke-width: 3px;
+  -webkit-text-stroke-color: #ffffff;
+  font-family: 'BentonSans Comp Bold', sans-serif;
+  font-size: 125px;
+  font-weight: 700;
+  text-align: center;
+  filter: drop-shadow(0px 0px 4px rgba(0,0,0,0.5));
+  letter-spacing: 1px;
+  z-index: 0;
+}
+
+@keyframes homescoreinmove {
+  from { transform: translate(976px, 874px); }
+  to { transform: translate(1086px, 874px); }
+}
+@keyframes homescoreinfade { to { opacity: 1; } }
+
+@keyframes awayscoreinmove {
+  from { transform: translate(769px, 874px); }
+  to { transform: translate(659px, 874px); }
+}
+@keyframes awayscoreinfade { to { opacity: 1; } }
+
+.gameclock {
+  position: absolute;
+  transform: translate(878px, 882px);
+  opacity: 0;
+  display: inline-block;
+  width: 200px;
+  color: #ffffff;
+  -webkit-text-stroke-width: 0.5px;
+  -webkit-text-stroke-color: #ffffff;
+  font-family: 'BentonSans Bold', sans-serif;
+  font-size: 55px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 5px;
+  z-index: 5;
+}
+
+.qtr {
+  position: absolute;
+  transform: translate(878px, 943px);
+  opacity: 0;
+  display: inline-block;
+  width: 200px;
+  color: #ffffff;
+  font-family: 'BentonSans Cond Medium', sans-serif;
+  font-size: 50px;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 5px;
+  z-index: 5;
+}
+
+@keyframes gameclockin {
+  0% { opacity: 0; } 20% { opacity: 0.5; } 40% { opacity: 0; } 60% { opacity: 0.5; } 80% { opacity: 0; } 100% { opacity: 1; }
+}
+@keyframes qtrclockin {
+  0% { opacity: 0; } 20% { opacity: 0.5; } 40% { opacity: 0; } 60% { opacity: 0.5; } 80% { opacity: 0; } 100% { opacity: 1; }
+}
+
+.animate-in .color-img-mask.homecolorin { animation: homecolorin 0s linear .99s forwards; }
+.animate-in .color2-img-mask.awaycolorin { animation: awaycolorin 0s linear .99s forwards; }
+
+.animate-in .awayabr.awayabrin {
+  animation: moveIn 0.233s cubic-bezier(0, 0, 0, 1) 1.04s forwards, fadeIn 0.233s linear 1.04s forwards;
+}
+.animate-in .homeabr.homeabrin {
+  animation: moveIn2 0.233s cubic-bezier(0, 0, 0, 1) 1.04s forwards, fadeIn2 0.233s linear 1.04s forwards;
+}
+.animate-in .homescore.homescoreinmove {
+  animation: homescoreinmove 0.233s cubic-bezier(0, 0, 0, 1) 1.04s forwards, homescoreinfade 0s linear 1.04s forwards;
+}
+.animate-in .awayscore.awayscoreinmove {
+  animation: awayscoreinmove 0.233s cubic-bezier(0, 0, 0, 1) 1.04s forwards, awayscoreinfade 0s linear 1.04s forwards;
+}
+.animate-in .gameclock { animation: gameclockin 0.4s linear 1s forwards; }
+.animate-in .qtr { animation: qtrclockin 0.4s linear 1.05s forwards; }
+
+.wrap:not(.animate-in) * {
+  opacity: 0 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* HARD CUT REST RULES: Force completely off-screen and invisible instantly if scorebug isn't in */
+.wrap:not(.animate-in) ~ .dnd-container {
+  opacity: 0 !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* --- THE CANVAS ENGINE STACKED INTEGRATION OVERLAY --- */
+.canvas-pipeline-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  pointer-events: none;
+  z-index: 10;
+}
+.canvas-layer {
+  position: absolute;
+  top: -42px;
+  left: 0;
+  width: 1940px;
+  height: 1100px;
+}
+.logo-layer {
+  position: absolute;
+  top: -40px; 
+  left: 0;
+  width: 1940px;
+  height: 1100px;
+}
+
+/* --- INTEGRATED DOWN & DISTANCE CODE --- */
+.dnd-container {
+    position: absolute;
+    top: 0px;   
+    left: 0px;  
+    width: 1920px;
+    height: 1080px;
+    z-index: 1;
+    opacity: 0;
+}
+
+.ddpng {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("d&dbg.png");
+    background-size: cover;
+    background-position: center;
+    z-index: 1; 
+}
+    
+.dd {
+    position: absolute;
+    top: 822px;   
+    left: 300px;  
+    width: 320px;  /* Extended from 200px to give '2nd & INCHES' plenty of horizontal room */
+    font-family: 'BentonSans Comp Bold', sans-serif;
+    font-size: 45px;
+    text-align: left;
+    color: white;
+    z-index: 2; 
+    white-space: nowrap; /* Forces text to absolutely stay on one single line */
+}
+
+.playclock {
+    position: absolute;
+    top: 822px;   
+    left: 445px;  
+    width: 200px;
+    font-family: 'BentonSans Comp Bold', sans-serif;
+    font-size: 45px;
+    text-align: right;
+    color: white;
+    z-index: 2; 
+}
+
+/* KEEPING YOUR EXACT PRECISE KEYFRAMES */
+@keyframes awayDdin {
+    from { transform: translate(0px, 100px); }
+    to { transform: translate(0px, 0px); }
+}
+@keyframes awayDdout {
+    from { transform: translate(0px, 0px); }
+    to { transform: translate(0px, 100px); }
+}
+
+@keyframes homeDdin {
+    from { transform: translate(998px, 100px); }
+    to { transform: translate(998px, 0px); }
+}
+@keyframes homeDdout {
+    from { transform: translate(998px, 0px); }
+    to { transform: translate(998px, 100px); }
+}
+
+/* HARD CUT OPACITY TOGGLES VIA FORWARDS STATE HANDLING WITH DELAY ON OUT ANIMATIONS */
+.away-dd-in { opacity: 1 !important; animation: awayDdin .9s cubic-bezier(0.71, 0.00, 0.28, 1.00) forwards; }
+.away-dd-out { transition: opacity 0s step-end 0.9s; opacity: 0 !important; animation: awayDdout .9s cubic-bezier(0.71, 0.00, 0.28, 1.00) forwards; }
+.home-dd-in { opacity: 1 !important; animation: homeDdin .9s cubic-bezier(0.71, 0.00, 0.28, 1.00) forwards; }
+.home-dd-out { transition: opacity 0s step-end 0.9s; opacity: 0 !important; animation: homeDdout .9s cubic-bezier(0.71, 0.00, 0.28, 1.00) forwards; }
+
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     SCOREBUG — occupies rows 0-1080, exactly as it did in the
+     original standalone file. Unchanged. Background is transparent.
+     ============================================================ -->
+
+
+<div id="bugWrapper" class="wrap">
+  <video class="bg" muted playsinline><source src="scorebugbg.webm" type="video/webm"></video>
+  <video class="bevel" muted playsinline><source src="bevel.webm" type="video/webm"></video>
+  <video class="awaycolor" muted playsinline><source src="awaycolor.webm" type="video/webm"></video>
+  <video class="homecolor" muted playsinline><source src="homecolor.webm" type="video/webm"></video>
+  
+  <img src="homecolor.png" id="homecolor.png" class="color-img-mask homecolorin" alt="Home Mask">
+  <img src="awaycolor.png" id="awaycolor.png" class="color2-img-mask awaycolorin" alt="Away Mask">
+
+  <div id="ui-awayabr" class="awayabr">AWAY</div>
+  <div id="ui-homeabr" class="homeabr">HOME</div>
+  
+  <div id="ui-away-to1" class="ato1"></div><div id="ui-away-to2" class="ato2"></div><div id="ui-away-to3" class="ato3"></div>
+  <div id="ui-home-to1" class="hto1"></div><div id="ui-home-to2" class="hto2"></div><div id="ui-home-to3" class="hto3"></div>
+  
+  <div id="ui-awayscore" class="awayscore">0</div>
+  <div id="ui-homescore" class="homescore">0</div>
+  <div id="ui-gameclock" class="gameclock">15:00</div>
+  <div id="ui-qtr" class="qtr">1st</div>
+</div>
+
+<div id="away-dnd" class="dnd-container">
+    <div class="ddpng"></div>
+    <div id="ui-away-dd-text" class="dd">1st DOWN</div>
+    <div id="ui-away-playclock" class="playclock">:40</div>
+</div>
+
+<div id="home-dnd" class="dnd-container">
+    <div class="ddpng"></div>
+    <div id="ui-home-dd-text" class="dd">1st DOWN</div>
+    <div id="ui-home-playclock" class="playclock">:40</div>
+</div>
+
+<div class="canvas-pipeline-container">
+    <video id="bug-video" autoplay muted playsinline style="display: none;"><source src="teamcolor.webm" type="video/webm"></video>
+    <video id="mask-video" autoplay muted playsinline style="display: none;"><source src="teamcolormask.webm" type="video/webm"></video>
+    <video id="td-video-source" muted playsinline style="display: none;"><source src="TOUCHDOWN.webm" type="video/webm"></video>
+
+    <canvas id="scratch-canvas" style="display: none;"></canvas>
+    <canvas id="home-canvas" class="canvas-layer"></canvas>
+    <canvas id="away-canvas" class="canvas-layer"></canvas>
+    <canvas id="td-canvas" class="canvas-layer"></canvas>
+    <canvas id="logo-canvas" class="logo-layer"></canvas>
+</div>
+
+
+<!-- ============================================================
+     CONTROLLER — overlaid on top of the scorebug's top 720px, within
+     the same 1920x1080 canvas (canvas size is unchanged).
+     In vMix, keep this Browser input's resolution at 1920x1080, then
+     apply Crop: Top = 720px so only the scorebug goes on air.
+     Click into the input in vMix to interact with the controller
+     in the uncropped view.
+     ============================================================ -->
+<div id="controllerRegion">
+
+
+
+
+<div id="activationOverlay" class="activation-overlay">
+
+  <div class="activation-box">
+
+    <h2>Enter Activation Key</h2>
+
+    <p>Please provide your unique product registration code to access the console window.</p>
+
+    <input type="text" id="activationKeyInput" class="activation-input" placeholder="XXXX-XXXX-XXXX" maxlength="14" autocomplete="off">
+
+    <div id="activationError" class="activation-error">INVALID ACTIVATION KEY</div>
+
+    <button id="verifyBtn" class="btn" style="width: 100%; padding: 12px;" onclick="checkActivationKey()">Verify Key</button>
+
+  </div>
+
+</div>
+
+
+
+<div id="masterCanvas" class="canvas-lock blurred">
+
+  <div class="panel-container">
+
+    
+
+    <div class="config-row-left">
+
+      <div class="color-picker-wrapper">
+        <button type="button" class="color-swatch-btn" id="away-color-swatch" style="background-color:#7e7e7e;" onclick="toggleColorPopup('away')" aria-label="Away team color"></button>
+        <div class="color-popup" id="away-color-popup">
+          <input type="range" class="hue-slider" id="away-hue-slider" min="0" max="360" value="0" oninput="onHueSlide('away', this.value)">
+          <input type="text" class="hex-input" id="away-hex-input" value="#7E7E7E" maxlength="7" oninput="onHexInput('away', this.value)">
+        </div>
+      </div>
+
+      <input type="text" id="away-abr-input" class="custom-text-input" style="width: 65px; flex-shrink: 0;" value="AWY" oninput="updateAwayAbr(this.value)">
+
+      <input type="file" id="away-logo-file" class="logo-file-picker" accept="image/*" onchange="handleLogoUpload('away')">
+
+    </div>
+
+    <div style="grid-column: span 4; position: absolute; left: 50%; transform: translateX(-50%); top: 15px; text-align: center; pointer-events: auto; z-index: 10;">
+      <a href="https://linktr.ee/maddenbroadcastingchannel" target="_blank" style="display: inline-block; text-decoration: none;">
+        <img src="MBC APEX.png" alt="MBC APEX" style="height: 75px; width: auto; display: block; margin: 0 auto; filter: brightness(0.647);">
+      </a>
+    </div>
+
+    
+
+    <div style="grid-column: span 4; text-align: center; font-weight: bold; color:#a5a5a5; font-size:11px; align-self: center; letter-spacing: 1px; text-transform: uppercase;"></div>
+
+    
+
+    <div class="config-row-right">
+
+      <input type="file" id="home-logo-file" class="logo-file-picker" accept="image/*" onchange="handleLogoUpload('home')">
+
+      <input type="text" id="home-abr-input" class="custom-text-input" style="width: 65px; flex-shrink: 0;" value="HME" oninput="updateHomeAbr(this.value)">
+
+      <div class="color-picker-wrapper">
+        <button type="button" class="color-swatch-btn" id="home-color-swatch" style="background-color:#ffffff;" onclick="toggleColorPopup('home')" aria-label="Home team color"></button>
+        <div class="color-popup align-right" id="home-color-popup">
+          <input type="range" class="hue-slider" id="home-hue-slider" min="0" max="360" value="0" oninput="onHueSlide('home', this.value)">
+          <input type="text" class="hex-input" id="home-hex-input" value="#FFFFFF" maxlength="7" oninput="onHexInput('home', this.value)">
+        </div>
+      </div>
+
+    </div>
+
+
+
+    <div class="divider-row"></div>
+
+
+
+    <div class="section-label">AWAY TEAM</div>
+
+    <div class="section-label">QUARTER</div>
+
+    <div class="section-label">HOME TEAM</div>
+
+
+
+    <div style="grid-column: span 4; display: flex; justify-content: center; align-items: center; gap: 24px;">
+
+      <div id="away-dd-circle" class="circle-toggle" onclick="toggleDd('away')" title="Toggle Away Down & Distance"></div>
+
+      <div id="away-score-val" class="score-display" style="grid-column: auto;">0</div>
+
+    </div>
+
+    
+
+    <div class="qtr-grid">
+
+      <button id="qtr-1st" class="btn" onclick="setQuarter('1st')">1st</button>
+
+      <button id="qtr-2nd" class="btn" onclick="setQuarter('2nd')">2nd</button>
+
+      <button id="qtr-3rd" class="btn" onclick="setQuarter('3rd')">3rd</button>
+
+      <button id="qtr-4th" class="btn" onclick="setQuarter('4th')">4th</button>
+
+    </div>
+
+    
+
+    <div style="grid-column: span 4; display: flex; justify-content: center; align-items: center; gap: 24px;">
+
+      <div id="home-score-val" class="score-display" style="grid-column: auto;">0</div>
+
+      <div id="home-dd-circle" class="circle-toggle" onclick="toggleDd('home')" title="Toggle Home Down & Distance"></div>
+
+    </div>
+
+    
+
+    <div style="grid-column: span 4; display: grid; grid-template-columns: repeat(5, 1fr); grid-gap: 8px; align-items: center;">
+
+      <div class="label-inline right-align">T/O</div>
+
+      <button id="ato1" class="btn active-toggle" onclick="toggleTimeout('away', 1)">1</button>
+
+      <button id="ato2" class="btn active-toggle" onclick="toggleTimeout('away', 2)">2</button>
+
+      <button id="ato3" class="btn active-toggle" onclick="toggleTimeout('away', 3)">3</button>
+
+      <button class="btn" onclick="triggerTouchdownSequence('away')">TD</button>
+
+    </div>
+
+    
+
+    <button id="qtr-OT" class="btn col-span-4" onclick="setQuarter('OT')">OT</button>
+
+    
+
+    <div style="grid-column: span 4; display: grid; grid-template-columns: repeat(5, 1fr); grid-gap: 8px; align-items: center;">
+
+      <button class="btn" onclick="triggerTouchdownSequence('home')">TD</button>
+
+      <button id="hto1" class="btn active-toggle" onclick="toggleTimeout('home', 1)">1</button>
+
+      <button id="hto2" class="btn active-toggle" onclick="toggleTimeout('home', 2)">2</button>
+
+      <button id="hto3" class="btn active-toggle" onclick="toggleTimeout('home', 3)">3</button>
+
+      <div class="label-inline left-align">T/O</div>
+
+    </div>
+
+
+
+    <div style="grid-column: span 4; display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 8px;">
+
+      <button class="btn" onclick="modifyScore('away', 1)">+1</button>
+
+      <button class="btn" onclick="modifyScore('away', 2)">+2</button>
+
+      <button class="btn" onclick="modifyScore('away', 3)">+3</button>
+
+      <button class="btn" onclick="modifyScore('away', 6)">+6</button>
+
+    </div>
+
+    
+
+    <button class="btn btn-reset col-span-4" onclick="resetAll()">RESET</button>
+
+    
+
+    <div style="grid-column: span 4; display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 8px;">
+
+      <button class="btn" onclick="modifyScore('home', 1)">+1</button>
+
+      <button class="btn" onclick="modifyScore('home', 2)">+2</button>
+
+      <button class="btn" onclick="modifyScore('home', 3)">+3</button>
+
+      <button class="btn" onclick="modifyScore('home', 6)">+6</button>
+
+    </div>
+
+
+
+    <div class="divider-row"></div>
+
+
+
+    <div class="label-inline right-align col-span-1">DOWN & DISTANCE</div>
+
+    <button id="dn-1st" class="btn col-span-1 active-toggle" onclick="setDown('1st')">1st</button>
+
+    <button id="dn-3rd" class="btn col-span-1" onclick="setDown('3rd')">3rd</button>
+
+    
+
+    <div class="clock-container">
+
+      <input type="text" id="game-clock-input" class="clock-input" value="15:00" onfocus="stopGameClock()" onchange="handleManualClockInput(this.value)">
+
+    </div>
+
+    
+
+    <button class="btn btn-action-start col-span-2" onclick="startGameClock()">START</button>
+
+    <button class="btn btn-action-stop col-span-2" onclick="stopGameClock()">STOP</button>
+
+    <div class="col-span-1"></div>
+
+
+
+    <div style="grid-column: 1;"></div>
+
+    <button id="dn-2nd" class="btn col-span-1" style="grid-column: 2;" onclick="setDown('2nd')">2nd</button>
+
+    <button id="dn-4th" class="btn col-span-1" style="grid-column: 3;" onclick="setDown('4th')">4th</button>
+
+    
+
+    <div id="play-clock-val" class="play-clock-large" style="grid-column: 5;">40</div>
+
+    
+
+    <div style="grid-column: 7/11; display: grid; grid-template-columns: repeat(4, 1fr); grid-gap: 8px;">
+
+      <button class="btn btn-action-start" onclick="startPlayClock()">START</button>
+
+      <button class="btn btn-action-stop" onclick="stopPlayClock()">STOP</button>
+
+      <button class="btn" onclick="resetPlayClock(40)">:40</button>
+
+      <button class="btn" onclick="resetPlayClock(25)">:25</button>
+
+    </div>
+
+    <div class="col-span-1"></div>
+
+
+
+    <div class="label-inline right-align col-span-1"></div>
+
+    <input type="text" id="distance-input" class="distance-input" style="grid-column: span 3;" value="1st DOWN" onfocus="handleManualDistanceFocus()" onblur="handleManualDistanceBlur()">
+
+    <button class="btn col-span-1" style="font-size: 11px; padding: 10px 2px;" onclick="setQuickDistance('INCHES')">INCHES</button>
+
+    <button class="btn col-span-1" style="font-size: 11px; padding: 10px 2px;" onclick="setQuickDistance('GOAL')">GOAL</button>
+
+    
+
+    <div style="grid-column: 8/13; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
+
+      <div class="label-inline right-align" style="font-size:11px; color: #a5a5a5;">SCOREBUG IN & OUT</div>
+
+      <button id="bug-in" class="btn active-toggle" style="width: 75px;" onclick="triggerAnimation('IN')">IN</button>
+
+      <button id="bug-out" class="btn" style="width: 75px;" onclick="triggerAnimation('OUT')">OUT</button>
+
+    </div>
+
+  </div>
+
+</div>
+
+</div>
+
+<script>
+
+  const bugWrapper = document.getElementById('bugWrapper');
+  const videoElements = document.querySelectorAll('video:not(#bug-video):not(#mask-video):not(#td-video-source)');
+  
+  const video = document.getElementById('bug-video');
+  const maskVideo = document.getElementById('mask-video');
+  const tdVideoSource = document.getElementById('td-video-source');
+  const homeCanvas = document.getElementById('home-canvas');
+  const homeCtx = homeCanvas.getContext('2d');
+  const awayCanvas = document.getElementById('away-canvas');
+  const awayCtx = awayCanvas.getContext('2d');
+  const tdCanvas = document.getElementById('td-canvas');
+  const tdCtx = tdCanvas.getContext('2d');
+  const scratchCanvas = document.getElementById('scratch-canvas');
+  const scratchCtx = scratchCanvas.getContext('2d');
+  const logoCanvas = document.getElementById('logo-canvas');
+  const logoCtx = logoCanvas.getContext('2d');
+
+  const width = 1940;
+  const height = 1100;
+  homeCanvas.width = width; homeCanvas.height = height;
+  awayCanvas.width = width; awayCanvas.height = height;
+  tdCanvas.width = width;   tdCanvas.height = height;
+  scratchCanvas.width = width; scratchCanvas.height = height;
+  logoCanvas.width = width; logoCanvas.height = height;
+
+  let homeColor = "#4f2683"; 
+  let awayColor = "#002244"; 
+  const homeLogoImg = new Image(); homeLogoImg.src = 'patriots.PNG';
+  const awayLogoImg = new Image(); awayLogoImg.src = 'patriots.PNG';
+
+  let lastAction = "";
+  let introSequenceActive = false;
+  let tdAnimationActive = false;
+  let tdStartTime = null;
+  let scoringSide = "away";
+
+  let currentAwayDdState = null;
+  let currentHomeDdState = null;
+
+  function renderLoop(timestamp) {
+      if (tdAnimationActive) {
+          if (!tdStartTime) tdStartTime = timestamp;
+          const elapsed = (timestamp - tdStartTime) / 1000;
+
+          if (tdVideoSource.ended) {
+              tdCtx.clearRect(0, 0, width, height);
+              logoCtx.clearRect(0, 0, width, height);
+              homeCtx.clearRect(0, 0, width, height);
+              awayCtx.clearRect(0, 0, width, height);
+              tdAnimationActive = false;
+              tdStartTime = null;
+          } else {
+              homeCtx.clearRect(0, 0, width, height);
+              awayCtx.clearRect(0, 0, width, height);
+              tdCtx.clearRect(0, 0, width, height);
+              scratchCtx.clearRect(0, 0, width, height);
+              logoCtx.clearRect(0, 0, width, height);
+
+              if (maskVideo.readyState >= 2) {
+                  if (video.readyState >= 2 && !video.ended) {
+                      scratchCtx.drawImage(video, 0, 0, width, height);
+                      scratchCtx.globalCompositeOperation = 'source-in';
+                      scratchCtx.fillStyle = (scoringSide === "home") ? homeColor : awayColor;
+                      scratchCtx.fillRect(0, 0, width, height);
+                      scratchCtx.globalCompositeOperation = 'source-over';
+
+                      if (scoringSide === "home") {
+                          homeCtx.drawImage(scratchCanvas, 0, 0, width, height);
+                          homeCtx.globalCompositeOperation = 'destination-in';
+                          homeCtx.drawImage(maskVideo, 0, 0, width, height);
+                          homeCtx.globalCompositeOperation = 'source-over';
+                      } else {
+                          awayCtx.drawImage(scratchCanvas, 0, 0, width, height);
+                          awayCtx.globalCompositeOperation = 'destination-in';
+                          awayCtx.drawImage(maskVideo, 0, 0, width, height);
+                          awayCtx.globalCompositeOperation = 'source-over';
+                      }
+                      scratchCtx.clearRect(0, 0, width, height);
+                  }
+
+                  if (tdVideoSource.readyState >= 2 && !tdVideoSource.ended) {
+                      tdCtx.drawImage(tdVideoSource, 0, 0, width, height);
+                      tdCtx.globalCompositeOperation = 'destination-in';
+                      tdCtx.drawImage(maskVideo, 0, 0, width, height);
+                      tdCtx.globalCompositeOperation = 'source-over';
+                  }
+
+                  const runningLogo = (scoringSide === "home") ? homeLogoImg : awayLogoImg;
+                  if (runningLogo.complete && runningLogo.naturalWidth !== 0) {
+                      const delay = 0.733; 
+                      const moveDuration = 3.266;
+                      const fadeDuration = 0.500;
+
+                      let currentLeft = 1500;
+                      let currentOpacity = 0;
+
+                      if (elapsed >= delay) {
+                          const moveProgress = Math.min((elapsed - delay) / moveDuration, 1);
+                          currentLeft = 1500 + (moveProgress * (1600 - 1500));
+                          const fadeProgress = Math.min((elapsed - delay) / fadeDuration, 1);
+                          currentOpacity = fadeProgress;
+                      }
+
+                      const maxBoundSize = 175; 
+                      let targetWidth = runningLogo.naturalWidth;
+                      let targetHeight = runningLogo.naturalHeight;
+                      const aspect = targetWidth / targetHeight;
+
+                      if (targetWidth > targetHeight) {
+                          if (targetWidth > maxBoundSize) {
+                              targetWidth = maxBoundSize;
+                              targetHeight = maxBoundSize / aspect;
+                          }
+                      } else {
+                          if (targetHeight > maxBoundSize) {
+                              targetHeight = maxBoundSize;
+                              targetWidth = maxBoundSize * aspect;
+                          }
+                      }
+
+                      const centerYOffset = 890 + ((200 - targetHeight) / 2);
+                      const centerXOffset = currentLeft + ((200 - targetWidth) / 2);
+
+                      logoCtx.save();
+                      logoCtx.globalAlpha = currentOpacity;
+                      logoCtx.drawImage(runningLogo, centerXOffset, centerYOffset, targetWidth, targetHeight);
+                      logoCtx.restore();
+
+                      logoCtx.globalCompositeOperation = 'destination-in';
+                      logoCtx.drawImage(maskVideo, 0, 0, width, height);
+                      logoCtx.globalCompositeOperation = 'source-over';
+                  }
+              }
+          }
+      }
+      requestAnimationFrame(renderLoop);
+  }
+  requestAnimationFrame(renderLoop);
+
+  // Called directly by the controller's syncState() now that both live on
+  // the same page — no BroadcastChannel/network hop needed, so updates are
+  // instant.
+  function applyState(state) {
+    if (!state) return;
+
+    if(state.away_color !== undefined) {
+      awayColor = state.away_color;
+      const aColorImg = document.getElementById('awaycolor.png');
+      if (aColorImg) aColorImg.style.filter = `drop-shadow(1920px 0 0 ${awayColor})`;
+    }
+    if(state.home_color !== undefined) {
+      homeColor = state.home_color;
+      const hColorImg = document.getElementById('homecolor.png');
+      if (hColorImg) hColorImg.style.filter = `drop-shadow(1920px 0 0 ${homeColor})`;
+    }
+
+    if(state.away_logo_url !== undefined && awayLogoImg.src !== state.away_logo_url) awayLogoImg.src = state.away_logo_url;
+    if(state.home_logo_url !== undefined && homeLogoImg.src !== state.home_logo_url) homeLogoImg.src = state.home_logo_url;
+    if(state.away_abr !== undefined) document.getElementById('ui-awayabr').innerText = state.away_abr;
+    if(state.home_abr !== undefined) document.getElementById('ui-homeabr').innerText = state.home_abr;
+
+    if(state.away_score !== undefined) document.getElementById('ui-awayscore').innerText = state.away_score;
+    if(state.home_score !== undefined) document.getElementById('ui-homescore').innerText = state.home_score;
+    if(state.game_clock !== undefined) document.getElementById('ui-gameclock').innerText = state.game_clock;
+    if(state.quarter !== undefined) document.getElementById('ui-qtr').innerText = state.quarter;
+
+    if(state.down !== undefined && state.distance !== undefined) {
+        let formattedString = "";
+        if (state.distance === "DOWN") {
+            formattedString = state.down; 
+        } else {
+            let cleanDown = state.down.split(" ")[0]; 
+            formattedString = `${cleanDown} & ${state.distance}`;
+        }
+        document.getElementById('ui-away-dd-text').innerText = formattedString;
+        document.getElementById('ui-home-dd-text').innerText = formattedString;
+    }
+    if(state.play_clock !== undefined) {
+        document.getElementById('ui-away-playclock').innerText = `:${state.play_clock}`;
+        document.getElementById('ui-home-playclock').innerText = `:${state.play_clock}`;
+    }
+
+    if(state.away_dd_active !== undefined && state.away_dd_active !== currentAwayDdState) {
+        currentAwayDdState = state.away_dd_active;
+        const el = document.getElementById('away-dnd');
+        el.className = "dnd-container " + (currentAwayDdState ? "away-dd-in" : "away-dd-out");
+    }
+
+    if(state.home_dd_active !== undefined && state.home_dd_active !== currentHomeDdState) {
+        currentHomeDdState = state.home_dd_active;
+        const el = document.getElementById('home-dnd');
+        el.className = "dnd-container " + (currentHomeDdState ? "home-dd-in" : "home-dd-out");
+    }
+
+    if (state.trigger_td_side !== undefined && state.trigger_td_side !== "") {
+        scoringSide = state.trigger_td_side;
+        tdAnimationActive = true;
+        tdStartTime = null;
+        
+        video.currentTime = 0;
+        maskVideo.currentTime = 0;
+        tdVideoSource.currentTime = 0;
+        
+        video.play().catch(e => {});
+        maskVideo.play().catch(e => {});
+        tdVideoSource.play().catch(e => {});
+    }
+
+    if (state.timeouts && state.action === 'IN' && !introSequenceActive) {
+      ['away', 'home'].forEach(team => {
+        for (let i = 1; i <= 3; i++) {
+          const el = document.getElementById(`ui-${team}-to${i}`);
+          if(el) {
+            el.style.opacity = state.timeouts[team][i-1] ? "1" : "0.5";
+          }
+        }
+      });
+    }
+
+    if (state.action !== lastAction) {
+      if (state.action === 'IN') {
+        introSequenceActive = true;
+        bugWrapper.classList.remove('animate-in');
+        
+        currentAwayDdState = false;
+        currentHomeDdState = false;
+        const awayDnD = document.getElementById('away-dnd');
+        const homeDnD = document.getElementById('home-dnd');
+        awayDnD.className = "dnd-container";
+        homeDnD.className = "dnd-container";
+        awayDnD.style.opacity = "0";
+        homeDnD.style.opacity = "0";
+        awayDnD.style.transform = "translate(0px, 100px)";
+        homeDnD.style.transform = "translate(998px, 100px)";
+        
+        videoElements.forEach(v => {
+          v.currentTime = 0;
+          v.play().catch(e => console.log("Playback prevented:", e));
+        });
+
+        document.getElementById('ui-awayabr').className = "awayabr";
+        document.getElementById('ui-homeabr').className = "homeabr";
+        document.getElementById('ui-awayscore').className = "awayscore";
+        document.getElementById('ui-homescore').className = "homescore";
+        
+        const hColorImg = document.getElementById('homecolor.png');
+        const aColorImg = document.getElementById('awaycolor.png');
+        if(hColorImg) hColorImg.className = "color-img-mask";
+        if(aColorImg) aColorImg.className = "color2-img-mask";
+
+        document.getElementById('ui-gameclock').className = "gameclock";
+        document.getElementById('ui-qtr').className = "qtr";
+
+        ['away', 'home'].forEach(team => {
+          for (let i = 1; i <= 3; i++) {
+            const el = document.getElementById(`ui-${team}-to${i}`);
+            if(el) el.style.opacity = "0";
+          }
+        });
+        
+        void bugWrapper.offsetWidth; 
+        
+        bugWrapper.classList.add('animate-in');
+        document.getElementById('ui-awayabr').classList.add('awayabrin');
+        document.getElementById('ui-homeabr').classList.add('homeabrin');
+        document.getElementById('ui-awayscore').classList.add('awayscoreinmove', 'awayscoreinfade');
+        document.getElementById('ui-homescore').classList.add('homescoreinmove', 'homescoreinfade');
+        
+        if(hColorImg) hColorImg.classList.add('homecolorin');
+        if(aColorImg) aColorImg.classList.add('awaycolorin');
+
+        setTimeout(() => { if(bugWrapper.classList.contains('animate-in')) document.getElementById('ui-away-to1').style.opacity = state.timeouts.away[0] ? "1" : "0.5"; }, 1040);
+        setTimeout(() => { if(bugWrapper.classList.contains('animate-in')) document.getElementById('ui-away-to2').style.opacity = state.timeouts.away[1] ? "1" : "0.5"; }, 1140);
+        setTimeout(() => { if(bugWrapper.classList.contains('animate-in')) document.getElementById('ui-away-to3').style.opacity = state.timeouts.away[2] ? "1" : "0.5"; }, 1240);
+        
+        setTimeout(() => { if(bugWrapper.classList.contains('animate-in')) document.getElementById('ui-home-to1').style.opacity = state.timeouts.home[0] ? "1" : "0.5"; }, 1040);
+        setTimeout(() => { if(bugWrapper.classList.contains('animate-in')) document.getElementById('ui-home-to2').style.opacity = state.timeouts.home[1] ? "1" : "0.5"; }, 1140);
+        setTimeout(() => { if(bugWrapper.classList.contains('animate-in')) document.getElementById('ui-home-to3').style.opacity = state.timeouts.home[2] ? "1" : "0.5"; }, 1240);
+
+        setTimeout(() => { introSequenceActive = false; }, 1500);
+
+      } else if (state.action === 'OUT') {
+        introSequenceActive = false;
+        bugWrapper.classList.remove('animate-in');
+        
+        currentAwayDdState = false;
+        currentHomeDdState = false;
+        document.getElementById('away-dnd').className = "dnd-container away-dd-out";
+        document.getElementById('home-dnd').className = "dnd-container home-dd-out";
+      }
+      lastAction = state.action;
+    }
+  }
+
+</script>
+<script>
+
+
+ // --- CRITICAL CONFIGURATION ---
+
+  const SUPABASE_URL = "https://znkqzwqweszelzstxcbh.supabase.co";
+
+  const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpua3F6d3F3ZXN6ZWx6c3R4Y2JoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MTk2NDgsImV4cCI6MjA5NzM5NTY0OH0.GDjdk5FILZtlWf3uRTIBhR3Nks8CgpwoN-h9hqq_QY8";
+
+
+
+  // Unique key identifier to prevent collisions with other local OBS files
+
+  const LICENSE_STORAGE_PREFIX = 'apex_scorebug_licensed_active_v1';
+
+  const LICENSE_STORAGE_FLAG = LICENSE_STORAGE_PREFIX + '_unlocked';
+
+  const DEVICE_ID_KEY = LICENSE_STORAGE_PREFIX + '_device_id';
+
+
+
+  // A stable random ID for this install, generated once and kept in
+
+  // localStorage. Used to bind an activation key to this specific dock/
+
+  // machine so the same key can't be used to unlock a different install.
+
+  function getDeviceId() {
+
+    let id = localStorage.getItem(DEVICE_ID_KEY);
+
+    if (!id) {
+
+      id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+
+      localStorage.setItem(DEVICE_ID_KEY, id);
+
+    }
+
+    return id;
+
+  }
+
+
+
+
+  const masterCanvas = document.getElementById('masterCanvas');
+
+  const activationOverlay = document.getElementById('activationOverlay');
+
+  const activationError = document.getElementById('activationError');
+
+  let currentSelectedDown = "1st"; 
+
+
+
+  let state = {
+
+    away_score: 0, home_score: 0, quarter: "1st", game_clock: "15:00", play_clock: "40",
+
+    action: "IN", down: "1st DOWN", distance: "DOWN", away_dd_active: false, home_dd_active: false,
+
+    timeouts: { away: [true, true, true], home: [true, true, true] },
+
+    away_color: "#7e7e7e", home_color: "#ffffff", away_abr: "AWY", home_abr: "HME",
+
+    away_logo_url: "CHOOSE", home_logo_url: "CHOOSE", trigger_td_side: ""
+
+  };
+
+
+
+  let gameTime = 15 * 60; let playTime = 40;
+
+  let gameClockInterval = null; let playClockInterval = null;
+
+
+
+  // Explicit initialization handler for OBS
+
+  function initConsole() {
+
+    applyDynamicScaling();
+
+
+
+    // Mask typing for the activation field (XXXX-XXXX-XXXX)
+
+    const keyInput = document.getElementById('activationKeyInput');
+
+    if (keyInput) {
+
+      keyInput.addEventListener('input', (e) => {
+
+        let value = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+        let formatted = '';
+
+        if (value.length > 0) formatted += value.substring(0, 4);
+
+        if (value.length > 4) formatted += '-' + value.substring(4, 8);
+
+        if (value.length > 8) formatted += '-' + value.substring(8, 12);
+
+        e.target.value = formatted;
+
+      });
+
+    }
+
+
+
+    // PERSISTENCE CHECK: has THIS dock's storage already been unlocked?
+
+    // localStorage survives a simple close/reopen of the dock, and only
+
+    // resets if the dock is fully deleted and re-added (per testing).
+
+    const isUnlocked = localStorage.getItem(LICENSE_STORAGE_FLAG) === 'true';
+
+
+
+    if (isUnlocked) {
+
+      bypassOverlay(); // This dock was already verified — skip the prompt
+
+    } else {
+
+      showOverlay(); // Brand new dock (never unlocked) — must enter key
+
+    }
+
+
+
+    // SECRET RE-LOCK: Ctrl+Shift+L clears this dock's unlock flag and shows
+
+    // the activation prompt again, without affecting any other dock/device.
+
+    window.addEventListener('keydown', (e) => {
+
+      if (e.ctrlKey && e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+
+        localStorage.removeItem(LICENSE_STORAGE_FLAG);
+
+        showOverlay();
+
+      }
+
+    });
+
+  }
+
+
+
+  // Combat OBS/CEF rendering speed variations by checking loading state instantly
+
+  if (document.readyState === 'loading') {
+
+    window.addEventListener('DOMContentLoaded', initConsole);
+
+  } else {
+
+    initConsole();
+
+  }
+
+
+
+  function showOverlay() {
+
+    activationOverlay.style.display = 'flex';
+
+    masterCanvas.classList.add('blurred');
+
+  }
+
+
+
+  function bypassOverlay() {
+
+    activationOverlay.style.display = 'none';
+
+    masterCanvas.classList.remove('blurred');
+
+  }
+
+
+
+  // LIVE DATABASE VERIFICATION + DEVICE BINDING
+
+  async function checkActivationKey() {
+
+    const inputEl = document.getElementById('activationKeyInput');
+
+    const enteredKey = inputEl.value;
+
+
+
+    if (!enteredKey) return;
+
+
+
+    const cleanKey = enteredKey.trim().toUpperCase();
+
+    activationError.style.display = 'none';
+
+    const myDeviceId = getDeviceId();
+
+
+
+    try {
+
+      const response = await fetch(`${SUPABASE_URL}/rest/v1/activation_keys?key_code=eq.${cleanKey}&select=*`, {
+
+        method: "GET",
+
+        headers: { "apikey": SUPABASE_ANON_KEY, "Authorization": `Bearer ${SUPABASE_ANON_KEY}` }
+
+      });
+
+      const data = await response.json();
+
+
+
+      if (!data || data.length === 0) {
+
+        activationError.innerText = "❌ KEY NOT FOUND IN DATABASE.";
+
+        activationError.style.display = 'block';
+
+        showOverlay();
+
+        return;
+
+      }
+
+
+
+      const keyRow = data[0];
+
+
+
+      if (keyRow.is_reusable === true) {
+
+        // Tester/reusable key — works on any device, never gets claimed.
+
+        localStorage.setItem(LICENSE_STORAGE_FLAG, 'true');
+
+        bypassOverlay();
+
+        return;
+
+      }
+
+
+
+      if (keyRow.device_id && keyRow.device_id !== myDeviceId) {
+
+        // Already claimed by a different device — block reuse/sharing.
+
+        activationError.innerText = "❌ KEY ALREADY IN USE ON ANOTHER DEVICE.";
+
+        activationError.style.display = 'block';
+
+        showOverlay();
+
+        return;
+
+      }
+
+
+
+      if (!keyRow.device_id) {
+
+        // First use of this key anywhere — claim it for this device.
+
+        // The RLS policy only allows this write when device_id is currently
+
+        // null, so a race between two devices can only let one succeed.
+
+        const claimResponse = await fetch(`${SUPABASE_URL}/rest/v1/activation_keys?key_code=eq.${cleanKey}&device_id=is.null`, {
+
+          method: "PATCH",
+
+          headers: {
+
+            "apikey": SUPABASE_ANON_KEY,
+
+            "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+
+            "Content-Type": "application/json",
+
+            "Prefer": "return=representation"
+
+          },
+
+          body: JSON.stringify({ device_id: myDeviceId })
+
+        });
+
+        const claimData = await claimResponse.json();
+
+
+
+        if (!claimResponse.ok || !claimData || claimData.length === 0) {
+
+          // Someone else claimed it a moment before us.
+
+          activationError.innerText = "❌ KEY ALREADY IN USE ON ANOTHER DEVICE.";
+
+          activationError.style.display = 'block';
+
+          showOverlay();
+
+          return;
+
+        }
+
+      }
+
+
+
+      // Success: remember this dock so it doesn't prompt again on this dock,
+
+      // even if the tab/dock is closed and reopened (but not delete+re-add).
+
+      localStorage.setItem(LICENSE_STORAGE_FLAG, 'true');
+
+      bypassOverlay();
+
+    } catch (error) {
+
+      activationError.innerText = "🚨 CONNECTION ERROR.";
+
+      activationError.style.display = 'block';
+
+    }
+
+  }
+
+
+
+  function applyDynamicScaling() {
+
+    const targetWidth = 1120;
+
+    const targetHeight = 720;
+
+    const region = document.getElementById('controllerRegion');
+
+    const windowWidth = region.clientWidth;
+
+    const windowHeight = region.clientHeight;
+
+    const scaleFactor = Math.min(windowWidth / targetWidth, windowHeight / targetHeight);
+
+    masterCanvas.style.transform = `scale(${scaleFactor})`;
+
+  }
+
+
+
+  window.addEventListener('resize', applyDynamicScaling);
+
+
+
+  function handleManualDistanceFocus() {
+
+    let inputEl = document.getElementById('distance-input');
+
+    inputEl.value = "";
+
+  }
+
+
+
+  function handleManualDistanceBlur() {
+
+    let inputEl = document.getElementById('distance-input');
+
+    let raw = inputEl.value.trim().toUpperCase();
+
+    let match = raw.match(/(\d+|GOAL|G|INCHES)/);
+
+
+
+    if (!match || raw === "") {
+
+      inputEl.value = `${currentSelectedDown} DOWN`;
+
+      state.distance = "DOWN";
+
+      state.down = `${currentSelectedDown} DOWN`;
+
+    } else {
+
+      let val = match[1];
+
+      if (val === "GOAL" || val === "G") {
+
+        inputEl.value = `${currentSelectedDown} & GOAL`;
+
+        state.distance = "GOAL";
+
+        state.down = currentSelectedDown;
+
+      } else if (val === "INCHES") {
+
+        inputEl.value = `${currentSelectedDown} & INCHES`;
+
+        state.distance = "INCHES";
+
+        state.down = currentSelectedDown;
+
+      } else {
+
+        inputEl.value = `${currentSelectedDown} & ${val}`;
+
+        state.distance = val;
+
+        state.down = currentSelectedDown;
+
+      }
+
+    }
+
+    syncState();
+
+  }
+
+
+
+  function setQuickDistance(type) {
+
+    let inputEl = document.getElementById('distance-input');
+
+    if (type === 'GOAL' || type === 'G') {
+
+      inputEl.value = `${currentSelectedDown} & GOAL`;
+
+      state.distance = "GOAL";
+
+      state.down = currentSelectedDown;
+
+    } else if (type === 'INCHES') {
+
+      inputEl.value = `${currentSelectedDown} & INCHES`;
+
+      state.distance = "INCHES";
+
+      state.down = currentSelectedDown;
+
+    }
+
+    syncState();
+
+  }
+
+
+
+  function setDown(downNum) { 
+
+    currentSelectedDown = downNum; 
+
+    ['1st', '2nd', '3rd', '4th'].forEach(item => {
+
+      const el = document.getElementById(`dn-${item}`);
+
+      if(el) el.classList.remove('active-toggle');
+
+    });
+
+    
+
+    const targetBtn = document.getElementById(`dn-${downNum}`);
+
+    if(targetBtn) targetBtn.classList.add('active-toggle');
+
+    
+
+    document.getElementById('distance-input').value = `${currentSelectedDown} DOWN`;
+
+    state.distance = "DOWN";
+
+    state.down = `${currentSelectedDown} DOWN`;
+
+    syncState(); 
+
+  }
+
+
+
+  function syncState() {
+
+    applyState(state);
+
+    if(state.trigger_td_side !== "") {
+
+        state.trigger_td_side = "";
+
+    }
+
+    localStorage.setItem('obs_bug_backup', JSON.stringify({ ...state, ts: Date.now() }));
+
+  }
+
+
+
+  function updateAwayColor(val) { state.away_color = val; syncState(); }
+
+  function updateHomeColor(val) { state.home_color = val; syncState(); }
+
+  // --- Custom color picker (native <input type="color"> doesn't open its
+  // picker UI inside vMix's embedded browser, so this replaces it with a
+  // simple in-page hue slider + hex input). ---
+
+  function toggleColorPopup(team) {
+    const popup = document.getElementById(`${team}-color-popup`);
+    const isOpen = popup.classList.contains('open');
+    document.querySelectorAll('.color-popup.open').forEach(p => p.classList.remove('open'));
+    if (!isOpen) popup.classList.add('open');
+  }
+
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.color-picker-wrapper')) {
+      document.querySelectorAll('.color-popup.open').forEach(p => p.classList.remove('open'));
+    }
+  });
+
+  function hslToHex(h, s, l) {
+    s /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    const toHex = x => Math.round(255 * x).toString(16).padStart(2, '0');
+    return `#${toHex(f(0))}${toHex(f(8))}${toHex(f(4))}`.toUpperCase();
+  }
+
+  function hexToHue(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length !== 6) return 0;
+    const r = parseInt(hex.substr(0, 2), 16) / 255;
+    const g = parseInt(hex.substr(2, 2), 16) / 255;
+    const b = parseInt(hex.substr(4, 2), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0;
+    const d = max - min;
+    if (d !== 0) {
+      switch (max) {
+        case r: h = ((g - b) / d) % 6; break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h *= 60;
+      if (h < 0) h += 360;
+    }
+    return Math.round(h);
+  }
+
+  function onHueSlide(team, hueVal) {
+    const hex = hslToHex(hueVal, 100, 50);
+    document.getElementById(`${team}-hex-input`).value = hex;
+    document.getElementById(`${team}-color-swatch`).style.backgroundColor = hex;
+    if (team === 'away') updateAwayColor(hex); else updateHomeColor(hex);
+  }
+
+  function onHexInput(team, hexVal) {
+    let v = hexVal.trim();
+    if (!v.startsWith('#')) v = '#' + v;
+    if (!/^#[0-9A-Fa-f]{6}$/.test(v)) return;
+    v = v.toUpperCase();
+    document.getElementById(`${team}-color-swatch`).style.backgroundColor = v;
+    document.getElementById(`${team}-hue-slider`).value = hexToHue(v);
+    if (team === 'away') updateAwayColor(v); else updateHomeColor(v);
+  }
+
+  function updateAwayAbr(val) { state.away_abr = val; syncState(); }
+
+  function updateHomeAbr(val) { state.home_abr = val; syncState(); }
+
+
+
+  function handleLogoUpload(team) {
+
+    const fileInput = document.getElementById(`${team}-logo-file`);
+
+    if (fileInput.files && fileInput.files[0]) {
+
+      const reader = new FileReader();
+
+      reader.onload = function(e) {
+
+        if (team === 'away') {
+
+          state.away_logo_url = e.target.result;
+
+        } else {
+
+          state.home_logo_url = e.target.result;
+
+        }
+
+        syncState();
+
+      };
+
+      reader.readAsDataURL(fileInput.files[0]);
+
+    }
+
+  }
+
+
+
+  function toggleDd(team) {
+
+    if (team === 'away') {
+
+      state.away_dd_active = !state.away_dd_active;
+
+      if (state.away_dd_active) state.home_dd_active = false;
+
+    } else {
+
+      state.home_dd_active = !state.home_dd_active;
+
+      if (state.home_dd_active) state.away_dd_active = false;
+
+    }
+
+    
+
+    document.getElementById('away-dd-circle').classList.toggle('toggled', state.away_dd_active);
+
+    document.getElementById('home-dd-circle').classList.toggle('toggled', state.home_dd_active);
+
+    syncState();
+
+  }
+
+
+
+  function triggerTouchdownSequence(team) {
+
+      stopGameClock();
+
+      modifyScore(team, 6);
+
+      state.away_dd_active = false;
+
+      state.home_dd_active = false;
+
+      document.getElementById('away-dd-circle').classList.remove('toggled');
+
+      document.getElementById('home-dd-circle').classList.remove('toggled');
+
+      state.trigger_td_side = team;
+
+      syncState();
+
+  }
+
+
+
+  function modifyScore(team, amt) {
+
+    if(team === 'away') {
+
+      state.away_score = Math.max(0, state.away_score + amt);
+
+      document.getElementById('away-score-val').innerText = state.away_score;
+
+    } else {
+
+      state.home_score = Math.max(0, state.home_score + amt);
+
+      document.getElementById('home-score-val').innerText = state.home_score;
+
+    }
+
+    syncState();
+
+  }
+
+
+
+  function setQuarter(qtr) { 
+
+    state.quarter = qtr; 
+
+    ['1st', '2nd', '3rd', '4th', 'OT'].forEach(item => {
+
+      const el = document.getElementById(`qtr-${item}`);
+
+      if(el) el.classList.remove('active-toggle');
+
+    });
+
+    const activeEl = document.getElementById(`qtr-${qtr}`);
+
+    if(activeEl) activeEl.classList.add('active-toggle');
+
+    syncState(); 
+
+  }
+
+
+
+  function toggleTimeout(team, num) {
+
+    state.timeouts[team][num-1] = !state.timeouts[team][num-1];
+
+    const btn = document.getElementById(`${team === 'away' ? 'a' : 'h'}to${num}`);
+
+    if(state.timeouts[team][num-1]) btn.classList.add('active-toggle');
+
+    else btn.classList.remove('active-toggle');
+
+    syncState();
+
+  }
+
+
+
+  function startGameClock() {
+
+    if (gameClockInterval) return;
+
+    gameClockInterval = setInterval(() => {
+
+      if (gameTime > 0) { gameTime--; updateGameClockDisplay(); } else { stopGameClock(); }
+
+    }, 1000);
+
+  }
+
+  
+
+  function stopGameClock() { clearInterval(gameClockInterval); gameClockInterval = null; }
+
+
+
+  function updateGameClockDisplay() {
+
+    let mins = Math.floor(gameTime / 60);
+
+    let secs = gameTime % 60;
+
+    state.game_clock = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+
+    document.getElementById('game-clock-input').value = state.game_clock;
+
+    syncState();
+
+  }
+
+
+
+  function handleManualClockInput(val) {
+
+    const parts = val.split(':');
+
+    if (parts.length === 2) {
+
+      gameTime = (parseInt(parts[0], 10) || 0) * 60 + (parseInt(parts[1], 10) || 0);
+
+    } else if (parts.length === 1) {
+
+      gameTime = parseInt(parts[0], 10) || 0;
+
+    }
+
+    updateGameClockDisplay();
+
+  }
+
+
+
+  function startPlayClock() {
+
+    if (playClockInterval) return;
+
+    playClockInterval = setInterval(() => {
+
+      if (playTime > 0) { playTime--; updatePlayClockDisplay(); } else { playTime = 40; updatePlayClockDisplay(); }
+
+    }, 1000);
+
+  }
+
+  
+
+  function stopPlayClock() { clearInterval(playClockInterval); playClockInterval = null; }
+
+  function resetPlayClock(seconds) { playTime = seconds; updatePlayClockDisplay(); }
+
+
+
+  function updatePlayClockDisplay() {
+
+    state.play_clock = playTime;
+
+    document.getElementById('play-clock-val').innerText = state.play_clock;
+
+    syncState();
+
+  }
+
+
+
+  function triggerAnimation(action) { 
+
+    state.action = action; 
+
+    if(action === 'IN') {
+
+      document.getElementById('bug-in').classList.add('active-toggle');
+
+      document.getElementById('bug-out').classList.remove('active-toggle');
+
+    } else {
+
+      document.getElementById('bug-in').classList.remove('active-toggle');
+
+      document.getElementById('bug-out').classList.add('active-toggle');
+
+      state.away_dd_active = false;
+
+      state.home_dd_active = false;
+
+      document.getElementById('away-dd-circle').classList.remove('toggled');
+
+      document.getElementById('home-dd-circle').classList.remove('toggled');
+
+    }
+
+    syncState(); 
+
+  }
+
+
+
+  function resetAll() {
+
+    stopGameClock(); stopPlayClock();
+
+    gameTime = 15 * 60; playTime = 40;
+
+    state.away_score = 0; state.home_score = 0; state.quarter = "1st"; state.action = "IN";
+
+    state.away_dd_active = false; state.home_dd_active = false;
+
+    state.timeouts = { away: [true, true, true], home: [true, true, true] };
+
+    
+
+    document.getElementById('away-score-val').innerText = 0;
+
+    document.getElementById('home-score-val').innerText = 0;
+
+    
+
+    setQuarter('1st'); setDown('1st'); triggerAnimation('IN');
+
+    updateGameClockDisplay(); updatePlayClockDisplay();
+
+    
+
+    ['away','home'].forEach(team => {
+
+      for(let i=1; i<=3; i++) {
+
+        document.getElementById(`${team === 'away' ? 'a' : 'h'}to${i}`).classList.add('active-toggle');
+
+      }
+
+    });
+
+    syncState();
+
+  }
+
+
+
+  setInterval(syncState, 1000);
+
+
+</script>
+</body>
+</html>
